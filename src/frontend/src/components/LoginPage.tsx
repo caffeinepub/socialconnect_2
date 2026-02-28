@@ -282,7 +282,7 @@ export function LoginPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <img
-                src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
+                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
                 alt="S Connect logo"
                 className="w-12 h-12 object-contain"
               />
@@ -337,7 +337,7 @@ export function LoginPage() {
             {/* Logo */}
             <div className="text-center mb-6">
               <img
-                src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
+                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
                 alt="S Connect logo"
                 className="w-14 h-14 mx-auto mb-3 object-contain"
               />

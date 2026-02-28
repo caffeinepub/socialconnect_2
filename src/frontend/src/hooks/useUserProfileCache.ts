@@ -7,6 +7,8 @@ import { useActor } from "./useActor";
 /**
  * Returns a function that fetches and caches user profiles by principal.
  * Uses React Query's cache so the same principal is only fetched once.
+ * NOTE: null profiles are NOT cached -- this ensures we retry on next call
+ * (avoids permanently caching "no profile" for users who haven't set one yet).
  */
 export function useUserProfileCache() {
   const { actor } = useActor();
@@ -19,11 +21,12 @@ export function useUserProfileCache() {
     async (principal: Principal): Promise<UserProfile | null> => {
       if (!actor) return null;
       const key = principal.toString();
+      // Only use cache if there is an actual profile stored (not null/undefined)
       const cached = queryClient.getQueryData<UserProfile | null>([
         "userProfile",
         key,
       ]);
-      if (cached !== undefined) return cached;
+      if (cached !== undefined && cached !== null) return cached;
 
       // Deduplicate in-flight requests
       if (pendingRef.current.has(key)) {
@@ -31,9 +34,12 @@ export function useUserProfileCache() {
       }
 
       const promise = actor.getUserProfile(principal).then((profile) => {
-        queryClient.setQueryData(["userProfile", key], profile);
+        // Only cache actual profiles -- never cache null so we always retry
+        if (profile !== null && profile !== undefined) {
+          queryClient.setQueryData(["userProfile", key], profile);
+        }
         pendingRef.current.delete(key);
-        return profile;
+        return profile ?? null;
       });
 
       pendingRef.current.set(key, promise);
@@ -42,5 +48,15 @@ export function useUserProfileCache() {
     [actor, queryClient],
   );
 
-  return { getProfile };
+  const refreshProfile = useCallback(
+    async (principal: Principal): Promise<UserProfile | null> => {
+      if (!actor) return null;
+      const key = principal.toString();
+      queryClient.removeQueries({ queryKey: ["userProfile", key] });
+      return getProfile(principal);
+    },
+    [actor, queryClient, getProfile],
+  );
+
+  return { getProfile, refreshProfile };
 }

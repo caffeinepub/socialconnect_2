@@ -161,14 +161,17 @@ function EditProfileModal({
         coverPhoto = ExternalBlob.fromBytes(bytes);
       }
 
-      await saveProfile.mutateAsync({
+      const profileToSave: UserProfile = {
         displayName: displayName.trim(),
         bio: bio.trim(),
-        avatar,
-        coverPhoto,
         isProfessional,
-        professionalTitle: professionalTitle.trim() || undefined,
-      });
+      };
+      if (avatar) profileToSave.avatar = avatar;
+      if (coverPhoto) profileToSave.coverPhoto = coverPhoto;
+      const trimmedTitle = professionalTitle.trim();
+      if (trimmedTitle) profileToSave.professionalTitle = trimmedTitle;
+
+      await saveProfile.mutateAsync(profileToSave);
 
       // Mark account as verified for referral tracking (silently)
       try {
@@ -185,7 +188,8 @@ function EditProfileModal({
 
       toast.success("Profile updated!");
       onClose();
-    } catch {
+    } catch (err) {
+      console.error("Failed to update profile:", err);
       toast.error("Failed to update profile");
     }
   };

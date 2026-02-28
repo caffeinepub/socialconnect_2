@@ -265,10 +265,8 @@ function FindFriendCard({
 
 function FindFriendsTab({
   myPrincipal,
-  friends,
 }: {
   myPrincipal: Principal | undefined;
-  friends: Principal[];
 }) {
   const { actor } = useActor();
   const { getProfile } = useUserProfileCache();
@@ -279,8 +277,6 @@ function FindFriendsTab({
   const [profileModalPrincipal, setProfileModalPrincipal] =
     useState<Principal | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const friendSet = new Set(friends.map((p) => p.toString()));
 
   const doSearch = useCallback(
     async (searchQuery: string) => {
@@ -296,7 +292,8 @@ function FindFriendsTab({
         const candidates: Principal[] = [];
         for (const principal of allUsers) {
           const key = principal.toString();
-          if (key === myPrincipal?.toString() || friendSet.has(key)) continue;
+          // Only exclude self -- friends should appear in results too (with "Friends" status shown)
+          if (key === myPrincipal?.toString()) continue;
           candidates.push(principal);
         }
 
@@ -321,7 +318,7 @@ function FindFriendsTab({
             try {
               status = await (actor as any).checkFriendRequestStatus(principal);
             } catch {
-              // ignore
+              // ignore -- user still shows up, just without status
             }
             // Provide a fallback profile for users who haven't set one up yet
             const resolvedProfile: UserProfile = profile ?? {
@@ -334,13 +331,15 @@ function FindFriendsTab({
         );
 
         setResults(withStatus);
-      } catch {
+      } catch (error) {
+        console.error("Friend search failed:", error);
+        toast.error("Search failed. Please try again.");
         setResults([]);
       } finally {
         setIsSearching(false);
       }
     },
-    [actor, myPrincipal, friendSet, getProfile],
+    [actor, myPrincipal, getProfile],
   );
 
   useEffect(() => {
@@ -697,7 +696,7 @@ export function FriendsPage() {
         </TabsContent>
 
         <TabsContent value="find" className="mt-4">
-          <FindFriendsTab myPrincipal={myPrincipal} friends={friends} />
+          <FindFriendsTab myPrincipal={myPrincipal} />
         </TabsContent>
       </Tabs>
 

@@ -1,31 +1,22 @@
 # SocialConnect
 
 ## Current State
-The app uses Internet Identity (ICP's decentralized auth) for login -- a single "Sign In" button on the login page. There are no username/password credentials. User profiles store `displayName`, `bio`, `avatar`, `coverPhoto`, `isProfessional`, `professionalTitle`. The backend has full social features: posts, comments, likes, friends, followers, messages, groups, reels, shop listings.
+The app has a full social network with profile editing. The `EditProfileModal` in `ProfilePage.tsx` handles profile updates by calling `saveProfile.mutateAsync(...)`. The `useSaveProfile` mutation passes the profile object directly to `actor.saveCallerUserProfile(profile)`.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Username/password credential storage in the backend (username mapped to hashed password and principal)
-- `registerWithCredentials(username, password)` backend function -- creates a credential record tied to the caller's principal
-- `loginWithCredentials(username, password)` backend query -- returns true/false for validation (actual session still uses Internet Identity; credentials are verified on-chain)
-- Login page redesign: show two tabs -- "Log In" (username + password fields) and "Create Account" (username + password + confirm password fields)
-- On "Create Account": calls Internet Identity login first (to get principal), then registers credentials
-- On "Log In": calls Internet Identity login (to get principal), then validates credentials against stored record
-- If logged-in principal has no credentials registered, prompt to set a username/password
+- Nothing new to add.
 
 ### Modify
-- `LoginPage.tsx` -- replace single Sign In button with tabbed username/password form
-- `ProfileSetupModal.tsx` -- after credential setup, redirect to profile setup if no profile exists
+- Fix `EditProfileModal.handleSave` so `professionalTitle: undefined` is replaced with the correct optional handling (omit field or set to `null`) to prevent Candid serialization errors.
+- Add error logging in the catch block so we can surface the real error message via toast instead of just "Failed to update profile".
+- Fix `ProfileSetupModal` to not call `markAccountVerified()` on every profile save -- it throws if already verified, causing the success to still show but potentially masking issues.
 
 ### Remove
-- Nothing removed
+- Nothing to remove.
 
 ## Implementation Plan
-1. Add `UserCredential` type and credential map to backend (`main.mo`)
-2. Add `registerWithCredentials(username, password)` -- stores username -> {principal, passwordHash} mapping; traps if username taken
-3. Add `loginWithCredentials(username, password)` query -- validates username+password, returns the associated principal as text (or traps if invalid)
-4. Add `getMyUsername()` query -- returns the username for the caller's principal if one exists
-5. Regenerate backend bindings
-6. Update `LoginPage.tsx` with tabbed UI: "Log In" tab (username + password) and "Create Account" tab (username + password + confirm)
-7. Auth flow: Internet Identity handles the cryptographic session; username/password is an additional layer verified on-chain
+1. In `ProfilePage.tsx`, fix `EditProfileModal.handleSave`: change `professionalTitle: professionalTitle.trim() || undefined` to use a proper optional pattern that Candid encoding accepts.
+2. Improve error handling in `handleSave` to log the actual error and show a more informative toast.
+3. In `useSaveProfile` in `useQueries.ts`, ensure the mutation properly handles optional fields.

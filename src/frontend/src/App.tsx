@@ -119,7 +119,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <img
-            src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
+            src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
             alt="S Connect logo"
             className="w-12 h-12 object-contain"
           />
@@ -170,7 +170,7 @@ export default function App() {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <img
-              src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
+              src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
               alt="S Connect logo"
               className="w-8 h-8 object-contain"
             />

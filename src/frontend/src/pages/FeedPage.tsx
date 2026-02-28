@@ -218,11 +218,12 @@ function FeedSearchBar({
           }),
         );
 
-        // Filter by display name
+        // Filter by display name (fall back to principal string for users with no profile)
         const lowerQuery = searchQuery.toLowerCase();
-        const matched = profileResults.filter(({ profile }) =>
-          profile?.displayName.toLowerCase().includes(lowerQuery),
-        );
+        const matched = profileResults.filter(({ profile, principal }) => {
+          const name = profile?.displayName ?? principal.toString();
+          return name.toLowerCase().includes(lowerQuery);
+        });
 
         // Fetch friend request status in parallel
         const withStatus = await Promise.all(
@@ -233,9 +234,15 @@ function FeedSearchBar({
             } catch {
               // ignore
             }
+            // Provide a fallback profile for users without one
+            const resolvedProfile: UserProfile = profile ?? {
+              displayName: `User (${principal.toString().slice(0, 8)}...)`,
+              bio: "",
+              isProfessional: false,
+            };
             return {
               principal,
-              profile: profile!,
+              profile: resolvedProfile,
               friendStatus: status,
               isFollowing: followingSet.has(principal.toString()),
             };
