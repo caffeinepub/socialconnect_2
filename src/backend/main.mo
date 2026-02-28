@@ -222,6 +222,24 @@ actor {
             };
             usernameToCredential.add(username, credential);
             principalToUsername.add(caller, username);
+
+            // Create default user profile if none exists yet
+            switch (userProfiles.get(caller)) {
+              case (null) {
+                let defaultProfile : UserProfile = {
+                  displayName = username;
+                  bio = "";
+                  avatar = null;
+                  coverPhoto = null;
+                  professionalTitle = null;
+                  isProfessional = false;
+                };
+                userProfiles.add(caller, defaultProfile);
+              };
+              case (?_) {
+                // Do nothing if profile already exists
+              };
+            };
           };
         };
       };

@@ -1043,11 +1043,13 @@ export function ProfilePage({ onOpenSettings }: ProfilePageProps) {
       </Tabs>
 
       {/* Edit Profile Modal */}
-      {profile && editOpen && (
+      {editOpen && (
         <EditProfileModal
           open={editOpen}
           onClose={() => setEditOpen(false)}
-          currentProfile={profile}
+          currentProfile={
+            profile ?? { displayName: "", bio: "", isProfessional: false }
+          }
         />
       )}
 

@@ -6,9 +6,9 @@ import {
   Bell,
   Eye,
   EyeOff,
-  Heart,
   Loader2,
   MessageCircle,
+  Phone,
   Users,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -22,6 +22,38 @@ type PendingOp =
 
 type FormError = string | null;
 
+type RegMode = "username" | "phone";
+
+const COUNTRY_CODES = [
+  { code: "+1", label: "🇺🇸 +1 (US/Canada)" },
+  { code: "+7", label: "🇷🇺 +7 (Russia)" },
+  { code: "+20", label: "🇪🇬 +20 (Egypt)" },
+  { code: "+27", label: "🇿🇦 +27 (South Africa)" },
+  { code: "+31", label: "🇳🇱 +31 (Netherlands)" },
+  { code: "+33", label: "🇫🇷 +33 (France)" },
+  { code: "+34", label: "🇪🇸 +34 (Spain)" },
+  { code: "+39", label: "🇮🇹 +39 (Italy)" },
+  { code: "+44", label: "🇬🇧 +44 (UK)" },
+  { code: "+49", label: "🇩🇪 +49 (Germany)" },
+  { code: "+52", label: "🇲🇽 +52 (Mexico)" },
+  { code: "+55", label: "🇧🇷 +55 (Brazil)" },
+  { code: "+61", label: "🇦🇺 +61 (Australia)" },
+  { code: "+62", label: "🇮🇩 +62 (Indonesia)" },
+  { code: "+63", label: "🇵🇭 +63 (Philippines)" },
+  { code: "+64", label: "🇳🇿 +64 (New Zealand)" },
+  { code: "+81", label: "🇯🇵 +81 (Japan)" },
+  { code: "+82", label: "🇰🇷 +82 (South Korea)" },
+  { code: "+86", label: "🇨🇳 +86 (China)" },
+  { code: "+90", label: "🇹🇷 +90 (Turkey)" },
+  { code: "+91", label: "🇮🇳 +91 (India)" },
+  { code: "+92", label: "🇵🇰 +92 (Pakistan)" },
+  { code: "+234", label: "🇳🇬 +234 (Nigeria)" },
+  { code: "+254", label: "🇰🇪 +254 (Kenya)" },
+  { code: "+880", label: "🇧🇩 +880 (Bangladesh)" },
+  { code: "+966", label: "🇸🇦 +966 (Saudi Arabia)" },
+  { code: "+971", label: "🇦🇪 +971 (UAE)" },
+];
+
 export function LoginPage() {
   const { login, clear, identity, loginStatus } = useInternetIdentity();
   const { actor, isFetching: actorFetching } = useActor();
@@ -33,7 +65,10 @@ export function LoginPage() {
   const [loginError, setLoginError] = useState<FormError>(null);
 
   // Register tab state
+  const [regMode, setRegMode] = useState<RegMode>("username");
   const [regUsername, setRegUsername] = useState("");
+  const [regCountryCode, setRegCountryCode] = useState("+1");
+  const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
@@ -118,7 +153,7 @@ export function LoginPage() {
     setLoginError(null);
     const username = loginUsername.trim();
     if (!username) {
-      setLoginError("Username is required.");
+      setLoginError("Username or phone number is required.");
       return;
     }
     if (!loginPassword) {
@@ -132,15 +167,32 @@ export function LoginPage() {
 
   const handleRegister = () => {
     setRegError(null);
-    const username = regUsername.trim();
-    if (!username) {
-      setRegError("Username is required.");
-      return;
+
+    let username = "";
+    if (regMode === "username") {
+      username = regUsername.trim();
+      if (!username) {
+        setRegError("Username is required.");
+        return;
+      }
+      if (username.length < 3) {
+        setRegError("Username must be at least 3 characters.");
+        return;
+      }
+    } else {
+      // phone mode
+      const digits = regPhone.replace(/[\s\-().]/g, "");
+      if (!digits || digits.length < 7) {
+        setRegError("Phone number must be at least 7 digits.");
+        return;
+      }
+      if (!/^\d+$/.test(digits)) {
+        setRegError("Phone number must contain only digits.");
+        return;
+      }
+      username = `${regCountryCode}${digits}`;
     }
-    if (username.length < 3) {
-      setRegError("Username must be at least 3 characters.");
-      return;
-    }
+
     if (!regPassword) {
       setRegError("Password is required.");
       return;
@@ -174,11 +226,6 @@ export function LoginPage() {
       label: "Stay Informed",
       desc: "Never miss a notification or update",
     },
-    {
-      icon: Heart,
-      label: "Show Appreciation",
-      desc: "Like and comment on posts you love",
-    },
   ];
 
   return (
@@ -210,13 +257,13 @@ export function LoginPage() {
             transition={{ duration: 0.6 }}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                <span className="text-2xl font-display font-bold text-white">
-                  S
-                </span>
-              </div>
+              <img
+                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+                alt="S Connect logo"
+                className="w-12 h-12 object-contain"
+              />
               <span className="text-3xl font-display font-bold text-white tracking-tight">
-                SocialSpace
+                S Connect
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-display font-bold text-white leading-tight mb-4">
@@ -265,17 +312,11 @@ export function LoginPage() {
           <div className="bg-card rounded-2xl p-8 card-shadow">
             {/* Logo */}
             <div className="text-center mb-6">
-              <div
-                className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
-                style={{
-                  background:
-                    "linear-gradient(135deg, oklch(0.42 0.18 265), oklch(0.58 0.16 220))",
-                }}
-              >
-                <span className="text-2xl font-display font-bold text-white">
-                  S
-                </span>
-              </div>
+              <img
+                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+                alt="S Connect logo"
+                className="w-14 h-14 mx-auto mb-3 object-contain"
+              />
               <h2 className="text-2xl font-display font-bold text-foreground">
                 Welcome to SocialSpace
               </h2>
@@ -316,12 +357,12 @@ export function LoginPage() {
                       htmlFor="login-username"
                       className="text-sm font-medium"
                     >
-                      Username
+                      Username or Phone Number
                     </Label>
                     <Input
                       id="login-username"
                       type="text"
-                      placeholder="your_username"
+                      placeholder="username or +1234567890"
                       autoComplete="username"
                       value={loginUsername}
                       onChange={(e) => {
@@ -331,6 +372,9 @@ export function LoginPage() {
                       disabled={isBusy}
                       className="h-11 rounded-xl"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      You can log in with your phone number as username.
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -419,27 +463,133 @@ export function LoginPage() {
                   className="space-y-4"
                   noValidate
                 >
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="reg-username"
-                      className="text-sm font-medium"
-                    >
-                      Username
-                    </Label>
-                    <Input
-                      id="reg-username"
-                      type="text"
-                      placeholder="choose_a_username"
-                      autoComplete="username"
-                      value={regUsername}
-                      onChange={(e) => {
-                        setRegUsername(e.target.value);
+                  {/* Mode toggle */}
+                  <div className="flex rounded-xl overflow-hidden border border-border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegMode("username");
                         setRegError(null);
                       }}
-                      disabled={isBusy}
-                      className="h-11 rounded-xl"
-                    />
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold transition-colors ${
+                        regMode === "username"
+                          ? "text-white"
+                          : "text-muted-foreground hover:text-foreground bg-transparent"
+                      }`}
+                      style={
+                        regMode === "username"
+                          ? {
+                              background:
+                                "linear-gradient(135deg, oklch(0.42 0.18 265), oklch(0.52 0.18 250))",
+                            }
+                          : {}
+                      }
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Username
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegMode("phone");
+                        setRegError(null);
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold transition-colors ${
+                        regMode === "phone"
+                          ? "text-white"
+                          : "text-muted-foreground hover:text-foreground bg-transparent"
+                      }`}
+                      style={
+                        regMode === "phone"
+                          ? {
+                              background:
+                                "linear-gradient(135deg, oklch(0.42 0.18 265), oklch(0.52 0.18 250))",
+                            }
+                          : {}
+                      }
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      Phone Number
+                    </button>
                   </div>
+
+                  <AnimatePresence mode="wait">
+                    {regMode === "username" ? (
+                      <motion.div
+                        key="username-field"
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="space-y-1.5"
+                      >
+                        <Label
+                          htmlFor="reg-username"
+                          className="text-sm font-medium"
+                        >
+                          Username
+                        </Label>
+                        <Input
+                          id="reg-username"
+                          type="text"
+                          placeholder="choose_a_username"
+                          autoComplete="username"
+                          value={regUsername}
+                          onChange={(e) => {
+                            setRegUsername(e.target.value);
+                            setRegError(null);
+                          }}
+                          disabled={isBusy}
+                          className="h-11 rounded-xl"
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="phone-field"
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="space-y-1.5"
+                      >
+                        <Label className="text-sm font-medium">
+                          Phone Number
+                        </Label>
+                        <div className="flex gap-2">
+                          <select
+                            value={regCountryCode}
+                            onChange={(e) => {
+                              setRegCountryCode(e.target.value);
+                              setRegError(null);
+                            }}
+                            disabled={isBusy}
+                            className="h-11 rounded-xl border border-input bg-background px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 min-w-0 w-36 flex-shrink-0"
+                          >
+                            {COUNTRY_CODES.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                          <Input
+                            type="tel"
+                            placeholder="7001234567"
+                            autoComplete="tel-national"
+                            value={regPhone}
+                            onChange={(e) => {
+                              setRegPhone(e.target.value);
+                              setRegError(null);
+                            }}
+                            disabled={isBusy}
+                            className="h-11 rounded-xl flex-1 min-w-0"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Enter digits only — no spaces or dashes needed.
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <div className="space-y-1.5">
                     <Label

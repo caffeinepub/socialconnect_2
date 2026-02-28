@@ -290,11 +290,12 @@ function FindFriendsTab({
           }),
         );
 
-        // Filter by display name and fetch friend request status in parallel
+        // Filter by display name (or include users with no profile as fallback)
         const lowerQuery = searchQuery.toLowerCase();
-        const matched = profileResults.filter(({ profile }) =>
-          profile?.displayName.toLowerCase().includes(lowerQuery),
-        );
+        const matched = profileResults.filter(({ profile, principal }) => {
+          const name = profile?.displayName ?? principal.toString();
+          return name.toLowerCase().includes(lowerQuery);
+        });
 
         const withStatus = await Promise.all(
           matched.map(async ({ principal, profile }) => {
@@ -304,7 +305,13 @@ function FindFriendsTab({
             } catch {
               // ignore
             }
-            return { principal, profile: profile!, status };
+            // Provide a fallback profile for users who haven't set one up yet
+            const resolvedProfile: UserProfile = profile ?? {
+              displayName: `User (${principal.toString().slice(0, 8)}...)`,
+              bio: "",
+              isProfessional: false,
+            };
+            return { principal, profile: resolvedProfile, status };
           }),
         );
 

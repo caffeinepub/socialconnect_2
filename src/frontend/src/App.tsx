@@ -111,15 +111,11 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, oklch(0.42 0.18 265), oklch(0.58 0.16 220))",
-            }}
-          >
-            <span className="text-xl font-display font-bold text-white">S</span>
-          </div>
+          <img
+            src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+            alt="S Connect logo"
+            className="w-12 h-12 object-contain"
+          />
           <Loader2
             className="w-5 h-5 animate-spin"
             style={{ color: "oklch(0.45 0.18 262)" }}
@@ -165,14 +161,11 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-              <span className="text-sm font-display font-bold text-white">
-                S
-              </span>
-            </div>
-            <span className="text-lg font-display font-bold text-white tracking-tight hidden sm:block">
-              SocialSpace
-            </span>
+            <img
+              src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+              alt="S Connect logo"
+              className="w-8 h-8 object-contain"
+            />
           </div>
 
           {/* Desktop Nav */}
