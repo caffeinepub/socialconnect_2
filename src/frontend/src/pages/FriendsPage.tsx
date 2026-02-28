@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { UserProfile } from "../backend";
 import { UserAvatar } from "../components/UserAvatar";
+import { UserProfileModal } from "../components/UserProfileModal";
 import {
   CalleeCallModal,
   IncomingCallBanner,
@@ -106,9 +107,11 @@ function FriendRequestCard({
 function FriendCard({
   principal,
   onVideoCall,
+  onViewProfile,
 }: {
   principal: Principal;
   onVideoCall: (principal: Principal, profile: UserProfile | null) => void;
+  onViewProfile: (principal: Principal) => void;
 }) {
   const { getProfile } = useUserProfileCache();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -123,29 +126,36 @@ function FriendCard({
       animate={{ opacity: 1, scale: 1 }}
       className="flex items-center gap-3 p-3 bg-card rounded-xl card-shadow"
     >
-      <div className="relative">
-        <UserAvatar profile={profile} size="md" />
-        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 online-dot rounded-full border-2 border-card" />
-      </div>
-      <div className="flex-1 min-w-0">
-        {profile ? (
-          <>
-            <p className="font-semibold text-sm font-display truncate">
-              {profile.displayName}
-            </p>
-            {profile.bio && (
-              <p className="text-xs text-muted-foreground truncate">
-                {profile.bio}
+      {/* Clickable avatar + name area */}
+      <button
+        type="button"
+        className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+        onClick={() => onViewProfile(principal)}
+      >
+        <div className="relative flex-shrink-0">
+          <UserAvatar profile={profile} size="md" />
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 online-dot rounded-full border-2 border-card" />
+        </div>
+        <div className="flex-1 min-w-0">
+          {profile ? (
+            <>
+              <p className="font-semibold text-sm font-display truncate hover:underline">
+                {profile.displayName}
               </p>
-            )}
-          </>
-        ) : (
-          <div className="space-y-1">
-            <Skeleton className="w-28 h-3.5 rounded" />
-            <Skeleton className="w-20 h-3 rounded" />
-          </div>
-        )}
-      </div>
+              {profile.bio && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {profile.bio}
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="space-y-1">
+              <Skeleton className="w-28 h-3.5 rounded" />
+              <Skeleton className="w-20 h-3 rounded" />
+            </div>
+          )}
+        </div>
+      </button>
       <div className="flex items-center gap-2 flex-shrink-0">
         <Button
           size="sm"
@@ -174,14 +184,17 @@ interface FindResult {
 function FindFriendCard({
   result,
   onSendRequest,
+  onViewProfile,
 }: {
   result: FindResult;
   onSendRequest: (principal: Principal) => void;
+  onViewProfile: (principal: Principal) => void;
 }) {
   const [optimisticStatus, setOptimisticStatus] =
     useState<RequestStatus | null>(result.status);
 
-  const handleAdd = () => {
+  const handleAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setOptimisticStatus(RequestStatus.pending);
     onSendRequest(result.principal);
   };
@@ -194,11 +207,12 @@ function FindFriendCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="flex items-center gap-3 p-3 bg-card rounded-xl card-shadow"
+      className="flex items-center gap-3 p-3 bg-card rounded-xl card-shadow cursor-pointer hover:bg-muted/30 transition-colors"
+      onClick={() => onViewProfile(result.principal)}
     >
       <UserAvatar profile={result.profile} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm font-display truncate">
+        <p className="font-semibold text-sm font-display truncate hover:underline">
           {result.profile.displayName}
         </p>
         {result.profile.bio && (
@@ -214,6 +228,7 @@ function FindFriendCard({
             variant="ghost"
             disabled
             className="h-8 px-3 rounded-lg text-xs font-semibold text-muted-foreground"
+            onClick={(e) => e.stopPropagation()}
           >
             <UserCheck className="w-3.5 h-3.5 mr-1" />
             Friends
@@ -224,6 +239,7 @@ function FindFriendCard({
             variant="ghost"
             disabled
             className="h-8 px-3 rounded-lg text-xs font-semibold text-muted-foreground"
+            onClick={(e) => e.stopPropagation()}
           >
             Pending
           </Button>
@@ -260,6 +276,8 @@ function FindFriendsTab({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FindResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [profileModalPrincipal, setProfileModalPrincipal] =
+    useState<Principal | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const friendSet = new Set(friends.map((p) => p.toString()));
@@ -382,7 +400,8 @@ function FindFriendsTab({
             Find new friends
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Search by name to find friends
+            Search by name to find friends — click a result to view their
+            profile
           </p>
         </div>
       )}
@@ -414,10 +433,18 @@ function FindFriendsTab({
               key={result.principal.toString()}
               result={result}
               onSendRequest={handleSendRequest}
+              onViewProfile={(p) => setProfileModalPrincipal(p)}
             />
           ))}
         </div>
       </AnimatePresence>
+
+      {/* User profile modal */}
+      <UserProfileModal
+        open={!!profileModalPrincipal}
+        onClose={() => setProfileModalPrincipal(null)}
+        principal={profileModalPrincipal}
+      />
     </div>
   );
 }
@@ -449,6 +476,10 @@ export function FriendsPage() {
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeIncomingCall, setActiveIncomingCall] =
     useState<IncomingCall | null>(null);
+
+  // Profile modal state
+  const [profileModalPrincipal, setProfileModalPrincipal] =
+    useState<Principal | null>(null);
 
   const myPrincipal = identity?.getPrincipal();
 
@@ -660,6 +691,7 @@ export function FriendsPage() {
               key={principal.toString()}
               principal={principal}
               onVideoCall={handleVideoCall}
+              onViewProfile={(p) => setProfileModalPrincipal(p)}
             />
           ))}
         </TabsContent>
@@ -700,6 +732,13 @@ export function FriendsPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Friend profile modal */}
+      <UserProfileModal
+        open={!!profileModalPrincipal}
+        onClose={() => setProfileModalPrincipal(null)}
+        principal={profileModalPrincipal}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import type { UserProfile } from "../backend";
 import { PostCard } from "../components/PostCard";
 import { PostComposer } from "../components/PostComposer";
 import { UserAvatar } from "../components/UserAvatar";
+import { UserProfileModal } from "../components/UserProfileModal";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { RequestStatus } from "../hooks/useQueries";
@@ -23,6 +24,7 @@ import { useUserProfileCache } from "../hooks/useUserProfileCache";
 
 interface FeedPageProps {
   currentProfile: UserProfile | null;
+  onMessageUser?: (principal: Principal) => void;
 }
 
 function PostSkeleton() {
@@ -53,12 +55,14 @@ interface SearchResultCardProps {
   result: SearchResult;
   onSendFriendRequest: (principal: Principal) => void;
   onFollow: (principal: Principal) => void;
+  onViewProfile: (principal: Principal) => void;
 }
 
 function SearchResultCard({
   result,
   onSendFriendRequest,
   onFollow,
+  onViewProfile,
 }: SearchResultCardProps) {
   const [optimisticFriendStatus, setOptimisticFriendStatus] =
     useState<RequestStatus | null>(result.friendStatus);
@@ -66,12 +70,14 @@ function SearchResultCard({
     result.isFollowing,
   );
 
-  const handleAddFriend = () => {
+  const handleAddFriend = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setOptimisticFriendStatus(RequestStatus.pending);
     onSendFriendRequest(result.principal);
   };
 
-  const handleFollow = () => {
+  const handleFollow = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setOptimisticFollowing(true);
     onFollow(result.principal);
   };
@@ -84,11 +90,12 @@ function SearchResultCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
-      className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 rounded-xl transition-colors"
+      className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 rounded-xl transition-colors cursor-pointer"
+      onClick={() => onViewProfile(result.principal)}
     >
       <UserAvatar profile={result.profile} size="sm" />
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm font-display truncate leading-tight">
+        <p className="font-semibold text-sm font-display truncate leading-tight hover:underline">
           {result.profile.displayName}
         </p>
         {result.profile.bio && (
@@ -123,6 +130,7 @@ function SearchResultCard({
             variant="ghost"
             disabled
             className="h-7 px-2.5 rounded-lg text-xs font-semibold text-muted-foreground"
+            onClick={(e) => e.stopPropagation()}
           >
             <UserCheck className="w-3 h-3 mr-1" />
             Friends
@@ -133,6 +141,7 @@ function SearchResultCard({
             variant="ghost"
             disabled
             className="h-7 px-2.5 rounded-lg text-xs font-semibold text-muted-foreground"
+            onClick={(e) => e.stopPropagation()}
           >
             Pending
           </Button>
@@ -158,7 +167,11 @@ function SearchResultCard({
 
 function FeedSearchBar({
   myPrincipal,
-}: { myPrincipal: Principal | undefined }) {
+  onMessage,
+}: {
+  myPrincipal: Principal | undefined;
+  onMessage?: (principal: Principal) => void;
+}) {
   const { actor } = useActor();
   const { getProfile } = useUserProfileCache();
   const sendFriendRequest = useSendFriendRequest();
@@ -174,6 +187,8 @@ function FeedSearchBar({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [profileModalPrincipal, setProfileModalPrincipal] =
+    useState<Principal | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -283,6 +298,11 @@ function FeedSearchBar({
     });
   };
 
+  const handleViewProfile = (principal: Principal) => {
+    setIsOpen(false);
+    setProfileModalPrincipal(principal);
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
@@ -342,6 +362,7 @@ function FeedSearchBar({
                     result={result}
                     onSendFriendRequest={handleSendFriendRequest}
                     onFollow={handleFollow}
+                    onViewProfile={handleViewProfile}
                   />
                 ))}
               </div>
@@ -349,11 +370,19 @@ function FeedSearchBar({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* User profile modal */}
+      <UserProfileModal
+        open={!!profileModalPrincipal}
+        onClose={() => setProfileModalPrincipal(null)}
+        principal={profileModalPrincipal}
+        onMessage={onMessage}
+      />
     </div>
   );
 }
 
-export function FeedPage({ currentProfile }: FeedPageProps) {
+export function FeedPage({ currentProfile, onMessageUser }: FeedPageProps) {
   const { identity } = useInternetIdentity();
   const { data: posts, isLoading } = useGetAllPosts();
   const myPrincipal = identity?.getPrincipal();
@@ -370,7 +399,7 @@ export function FeedPage({ currentProfile }: FeedPageProps) {
   return (
     <div className="space-y-3">
       {/* Friend search bar */}
-      <FeedSearchBar myPrincipal={myPrincipal} />
+      <FeedSearchBar myPrincipal={myPrincipal} onMessage={onMessageUser} />
 
       <PostComposer currentProfile={currentProfile} />
 

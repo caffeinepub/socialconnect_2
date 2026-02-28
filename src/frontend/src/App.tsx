@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Film,
+  Gift,
   Home,
   Loader2,
   LogOut,
@@ -34,11 +35,13 @@ import { useThemeContext } from "./components/ThemeProvider";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import {
   useGetCallerUserProfile,
+  useGetMyUsername,
   useGetNotifications,
   useGetUnreadMessageCount,
 } from "./hooks/useQueries";
 import { FeedPage } from "./pages/FeedPage";
 import { FriendsPage } from "./pages/FriendsPage";
+import { InviteEarnPage } from "./pages/InviteEarnPage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -52,7 +55,8 @@ type Page =
   | "profile"
   | "shop"
   | "messages"
-  | "reels";
+  | "reels"
+  | "invite";
 
 function getInitials(name: string | undefined | null): string {
   if (!name) return "?";
@@ -68,6 +72,7 @@ const navItems = [
   { id: "messages" as Page, icon: MessageCircle, label: "Messages" },
   { id: "reels" as Page, icon: Film, label: "Reels" },
   { id: "notifications" as Page, icon: Bell, label: "Notifs" },
+  { id: "invite" as Page, icon: Gift, label: "Invite" },
   { id: "profile" as Page, icon: User, label: "Profile" },
 ];
 
@@ -86,6 +91,8 @@ export default function App() {
     isLoading: profileLoading,
     isFetched: profileFetched,
   } = useGetCallerUserProfile();
+
+  const { data: myUsername } = useGetMyUsername();
 
   const { data: notifications = [] } = useGetNotifications();
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -112,7 +119,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <img
-            src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+            src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
             alt="S Connect logo"
             className="w-12 h-12 object-contain"
           />
@@ -135,7 +142,8 @@ export default function App() {
   }
 
   const avatarUrl = profile?.avatar?.getDirectURL();
-  const initials = getInitials(profile?.displayName);
+  const displayLabel = profile?.displayName || myUsername || "User";
+  const initials = getInitials(displayLabel);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -148,7 +156,7 @@ export default function App() {
       />
 
       {/* Profile Setup Modal */}
-      <ProfileSetupModal open={showProfileSetup} />
+      <ProfileSetupModal open={showProfileSetup} defaultUsername={myUsername} />
 
       {/* Top Navbar */}
       <header
@@ -162,7 +170,7 @@ export default function App() {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <img
-              src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+              src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
               alt="S Connect logo"
               className="w-8 h-8 object-contain"
             />
@@ -232,10 +240,12 @@ export default function App() {
               <DropdownMenuContent align="end" className="w-56 rounded-xl">
                 <div className="px-3 py-2 border-b border-border">
                   <p className="font-semibold text-sm font-display">
-                    {profile?.displayName ?? "User"}
+                    {displayLabel}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {identity.getPrincipal().toString().slice(0, 20)}...
+                    {myUsername ??
+                      identity.getPrincipal().toString().slice(0, 20)}
+                    ...
                   </p>
                 </div>
                 <DropdownMenuItem
@@ -357,7 +367,7 @@ export default function App() {
                   </Avatar>
                   <div className="min-w-0">
                     <p className="font-semibold text-sm font-display truncate">
-                      {profile?.displayName ?? "User"}
+                      {displayLabel}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       View profile
@@ -395,7 +405,10 @@ export default function App() {
                 transition={{ duration: 0.15 }}
               >
                 {activePage === "feed" && (
-                  <FeedPage currentProfile={profile ?? null} />
+                  <FeedPage
+                    currentProfile={profile ?? null}
+                    onMessageUser={handleMessageSeller}
+                  />
                 )}
                 {activePage === "friends" && <FriendsPage />}
                 {activePage === "shop" && (
@@ -408,6 +421,7 @@ export default function App() {
                 )}
                 {activePage === "reels" && <ReelsPage />}
                 {activePage === "notifications" && <NotificationsPage />}
+                {activePage === "invite" && <InviteEarnPage />}
                 {activePage === "profile" && (
                   <ProfilePage onOpenSettings={() => setSettingsOpen(true)} />
                 )}

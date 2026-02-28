@@ -40,6 +40,25 @@ export const Reel = IDL.Record({
   'creatorId' : IDL.Principal,
   'timestamp' : Time,
 });
+export const StoreListing = IDL.Record({
+  'id' : IDL.Nat,
+  'title' : IDL.Text,
+  'description' : IDL.Text,
+  'seller' : IDL.Principal,
+  'timestamp' : Time,
+  'image' : IDL.Opt(ExternalBlob),
+  'price' : IDL.Text,
+});
+export const WebRTCAnswer = IDL.Record({
+  'sdp' : IDL.Text,
+  'callee' : IDL.Principal,
+  'caller' : IDL.Principal,
+});
+export const WebRTCOffer = IDL.Record({
+  'sdp' : IDL.Text,
+  'callee' : IDL.Principal,
+  'caller' : IDL.Principal,
+});
 export const UserProfile = IDL.Record({
   'bio' : IDL.Text,
   'displayName' : IDL.Text,
@@ -77,6 +96,19 @@ export const GroupMessage = IDL.Record({
   'timestamp' : Time,
   'senderId' : IDL.Principal,
 });
+export const Notification = IDL.Record({
+  'id' : IDL.Nat,
+  'read' : IDL.Bool,
+  'recipient' : IDL.Principal,
+  'message' : IDL.Text,
+  'timestamp' : Time,
+});
+export const ReferralStats = IDL.Record({
+  'referralCode' : IDL.Text,
+  'balance' : IDL.Nat,
+  'totalReferrals' : IDL.Nat,
+  'verifiedReferrals' : IDL.Nat,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -107,18 +139,38 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addComment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+  'addEmojiReaction' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'addGroupMember' : IDL.Func([IDL.Nat, IDL.Principal], [], []),
+  'addICECandidate' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'checkCallerHasLiked' : IDL.Func([IDL.Nat], [IDL.Bool], ['query']),
+  'checkFriendRequestStatus' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(IDL.Text)],
+      ['query'],
+    ),
   'checkUsernameAvailable' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   'createGroup' : IDL.Func([IDL.Text], [IDL.Nat], []),
   'createPost' : IDL.Func([IDL.Text, IDL.Opt(ExternalBlob)], [], []),
   'createReel' : IDL.Func([IDL.Text, ExternalBlob], [IDL.Nat], []),
+  'createStoreListing' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Opt(ExternalBlob)],
+      [],
+      [],
+    ),
+  'deleteComment' : IDL.Func([IDL.Nat], [], []),
   'deleteGroup' : IDL.Func([IDL.Nat], [], []),
+  'deletePost' : IDL.Func([IDL.Nat], [], []),
   'deleteReel' : IDL.Func([IDL.Nat], [], []),
+  'deleteStoreListing' : IDL.Func([IDL.Nat], [], []),
+  'endCall' : IDL.Func([IDL.Text], [], []),
   'followUser' : IDL.Func([IDL.Principal], [], []),
   'getAllPosts' : IDL.Func([], [IDL.Vec(Post)], ['query']),
   'getAllReels' : IDL.Func([], [IDL.Vec(Reel)], ['query']),
+  'getAllStoreListings' : IDL.Func([], [IDL.Vec(StoreListing)], ['query']),
   'getAllUsers' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+  'getCallAnswer' : IDL.Func([IDL.Text], [IDL.Opt(WebRTCAnswer)], ['query']),
+  'getCallOffer' : IDL.Func([IDL.Text], [IDL.Opt(WebRTCOffer)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCommentsByPost' : IDL.Func([IDL.Nat], [IDL.Vec(Comment)], ['query']),
@@ -128,6 +180,11 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getConversations' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+  'getEmojiReactions' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+      ['query'],
+    ),
   'getFollowers' : IDL.Func(
       [IDL.Principal],
       [IDL.Vec(IDL.Principal)],
@@ -141,11 +198,30 @@ export const idlService = IDL.Service({
   'getFriends' : IDL.Func([IDL.Principal], [IDL.Vec(IDL.Principal)], ['query']),
   'getGroupById' : IDL.Func([IDL.Nat], [IDL.Opt(Group)], ['query']),
   'getGroupMessages' : IDL.Func([IDL.Nat], [IDL.Vec(GroupMessage)], ['query']),
+  'getICECandidates' : IDL.Func(
+      [IDL.Text, IDL.Principal],
+      [IDL.Vec(IDL.Text)],
+      ['query'],
+    ),
   'getLikesCount' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
+  'getMyBalance' : IDL.Func([], [IDL.Nat], ['query']),
   'getMyGroups' : IDL.Func([], [IDL.Vec(Group)], ['query']),
+  'getMyReferralCode' : IDL.Func([], [IDL.Text], []),
   'getMyUsername' : IDL.Func([], [IDL.Opt(IDL.Text)], ['query']),
+  'getNotifications' : IDL.Func([], [IDL.Vec(Notification)], ['query']),
+  'getPendingFriendRequests' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Record({ 'from' : IDL.Principal, 'timestamp' : Time }))],
+      ['query'],
+    ),
   'getPostsByUser' : IDL.Func([IDL.Principal], [IDL.Vec(Post)], ['query']),
   'getReelsByUser' : IDL.Func([IDL.Principal], [IDL.Vec(Reel)], ['query']),
+  'getReferralStats' : IDL.Func([], [ReferralStats], ['query']),
+  'getStoreListingsByUser' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Vec(StoreListing)],
+      ['query'],
+    ),
   'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
@@ -159,14 +235,20 @@ export const idlService = IDL.Service({
       [IDL.Bool],
       ['query'],
     ),
+  'markAccountVerified' : IDL.Func([], [], []),
   'markConversationRead' : IDL.Func([IDL.Principal], [], []),
+  'markNotificationAsRead' : IDL.Func([IDL.Nat], [], []),
+  'redeemReferralCode' : IDL.Func([IDL.Text], [], []),
   'registerWithCredentials' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'removeEmojiReaction' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'removeGroupMember' : IDL.Func([IDL.Nat, IDL.Principal], [], []),
   'respondToFriendRequest' : IDL.Func([IDL.Principal, IDL.Bool], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'sendFriendRequest' : IDL.Func([IDL.Principal], [], []),
   'sendGroupMessage' : IDL.Func([IDL.Nat, IDL.Text], [IDL.Nat], []),
-  'sendMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
+  'sendMessage' : IDL.Func([IDL.Principal, IDL.Text], [IDL.Nat], []),
+  'storeCallAnswer' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'storeCallOffer' : IDL.Func([IDL.Text, IDL.Text, IDL.Principal], [], []),
   'unfollowUser' : IDL.Func([IDL.Principal], [], []),
 });
 
@@ -205,6 +287,25 @@ export const idlFactory = ({ IDL }) => {
     'creatorId' : IDL.Principal,
     'timestamp' : Time,
   });
+  const StoreListing = IDL.Record({
+    'id' : IDL.Nat,
+    'title' : IDL.Text,
+    'description' : IDL.Text,
+    'seller' : IDL.Principal,
+    'timestamp' : Time,
+    'image' : IDL.Opt(ExternalBlob),
+    'price' : IDL.Text,
+  });
+  const WebRTCAnswer = IDL.Record({
+    'sdp' : IDL.Text,
+    'callee' : IDL.Principal,
+    'caller' : IDL.Principal,
+  });
+  const WebRTCOffer = IDL.Record({
+    'sdp' : IDL.Text,
+    'callee' : IDL.Principal,
+    'caller' : IDL.Principal,
+  });
   const UserProfile = IDL.Record({
     'bio' : IDL.Text,
     'displayName' : IDL.Text,
@@ -242,6 +343,19 @@ export const idlFactory = ({ IDL }) => {
     'timestamp' : Time,
     'senderId' : IDL.Principal,
   });
+  const Notification = IDL.Record({
+    'id' : IDL.Nat,
+    'read' : IDL.Bool,
+    'recipient' : IDL.Principal,
+    'message' : IDL.Text,
+    'timestamp' : Time,
+  });
+  const ReferralStats = IDL.Record({
+    'referralCode' : IDL.Text,
+    'balance' : IDL.Nat,
+    'totalReferrals' : IDL.Nat,
+    'verifiedReferrals' : IDL.Nat,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -272,18 +386,38 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addComment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+    'addEmojiReaction' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'addGroupMember' : IDL.Func([IDL.Nat, IDL.Principal], [], []),
+    'addICECandidate' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'checkCallerHasLiked' : IDL.Func([IDL.Nat], [IDL.Bool], ['query']),
+    'checkFriendRequestStatus' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(IDL.Text)],
+        ['query'],
+      ),
     'checkUsernameAvailable' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
     'createGroup' : IDL.Func([IDL.Text], [IDL.Nat], []),
     'createPost' : IDL.Func([IDL.Text, IDL.Opt(ExternalBlob)], [], []),
     'createReel' : IDL.Func([IDL.Text, ExternalBlob], [IDL.Nat], []),
+    'createStoreListing' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Opt(ExternalBlob)],
+        [],
+        [],
+      ),
+    'deleteComment' : IDL.Func([IDL.Nat], [], []),
     'deleteGroup' : IDL.Func([IDL.Nat], [], []),
+    'deletePost' : IDL.Func([IDL.Nat], [], []),
     'deleteReel' : IDL.Func([IDL.Nat], [], []),
+    'deleteStoreListing' : IDL.Func([IDL.Nat], [], []),
+    'endCall' : IDL.Func([IDL.Text], [], []),
     'followUser' : IDL.Func([IDL.Principal], [], []),
     'getAllPosts' : IDL.Func([], [IDL.Vec(Post)], ['query']),
     'getAllReels' : IDL.Func([], [IDL.Vec(Reel)], ['query']),
+    'getAllStoreListings' : IDL.Func([], [IDL.Vec(StoreListing)], ['query']),
     'getAllUsers' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+    'getCallAnswer' : IDL.Func([IDL.Text], [IDL.Opt(WebRTCAnswer)], ['query']),
+    'getCallOffer' : IDL.Func([IDL.Text], [IDL.Opt(WebRTCOffer)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCommentsByPost' : IDL.Func([IDL.Nat], [IDL.Vec(Comment)], ['query']),
@@ -293,6 +427,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getConversations' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+    'getEmojiReactions' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+        ['query'],
+      ),
     'getFollowers' : IDL.Func(
         [IDL.Principal],
         [IDL.Vec(IDL.Principal)],
@@ -314,11 +453,30 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(GroupMessage)],
         ['query'],
       ),
+    'getICECandidates' : IDL.Func(
+        [IDL.Text, IDL.Principal],
+        [IDL.Vec(IDL.Text)],
+        ['query'],
+      ),
     'getLikesCount' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
+    'getMyBalance' : IDL.Func([], [IDL.Nat], ['query']),
     'getMyGroups' : IDL.Func([], [IDL.Vec(Group)], ['query']),
+    'getMyReferralCode' : IDL.Func([], [IDL.Text], []),
     'getMyUsername' : IDL.Func([], [IDL.Opt(IDL.Text)], ['query']),
+    'getNotifications' : IDL.Func([], [IDL.Vec(Notification)], ['query']),
+    'getPendingFriendRequests' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Record({ 'from' : IDL.Principal, 'timestamp' : Time }))],
+        ['query'],
+      ),
     'getPostsByUser' : IDL.Func([IDL.Principal], [IDL.Vec(Post)], ['query']),
     'getReelsByUser' : IDL.Func([IDL.Principal], [IDL.Vec(Reel)], ['query']),
+    'getReferralStats' : IDL.Func([], [ReferralStats], ['query']),
+    'getStoreListingsByUser' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(StoreListing)],
+        ['query'],
+      ),
     'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
@@ -332,14 +490,20 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Bool],
         ['query'],
       ),
+    'markAccountVerified' : IDL.Func([], [], []),
     'markConversationRead' : IDL.Func([IDL.Principal], [], []),
+    'markNotificationAsRead' : IDL.Func([IDL.Nat], [], []),
+    'redeemReferralCode' : IDL.Func([IDL.Text], [], []),
     'registerWithCredentials' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'removeEmojiReaction' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'removeGroupMember' : IDL.Func([IDL.Nat, IDL.Principal], [], []),
     'respondToFriendRequest' : IDL.Func([IDL.Principal, IDL.Bool], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'sendFriendRequest' : IDL.Func([IDL.Principal], [], []),
     'sendGroupMessage' : IDL.Func([IDL.Nat, IDL.Text], [IDL.Nat], []),
-    'sendMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
+    'sendMessage' : IDL.Func([IDL.Principal, IDL.Text], [IDL.Nat], []),
+    'storeCallAnswer' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'storeCallOffer' : IDL.Func([IDL.Text, IDL.Text, IDL.Principal], [], []),
     'unfollowUser' : IDL.Func([IDL.Principal], [], []),
   });
 };

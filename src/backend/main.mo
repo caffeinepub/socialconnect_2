@@ -1,24 +1,25 @@
 import Map "mo:core/Map";
 import Set "mo:core/Set";
-import Iter "mo:core/Iter";
 import Array "mo:core/Array";
+import Time "mo:core/Time";
 import Text "mo:core/Text";
 import Nat "mo:core/Nat";
-import List "mo:core/List";
-import Time "mo:core/Time";
-import Order "mo:core/Order";
 import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Runtime "mo:core/Runtime";
+
+import Iter "mo:core/Iter";
+
 
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
 
+  // Types
   type UserProfile = {
     displayName : Text;
     bio : Text;
@@ -131,83 +132,64 @@ actor {
     timestamp : Time.Time;
   };
 
-  // New UserCredential type
   type UserCredential = {
     username : Text;
     passwordHash : Text;
     principalId : Principal;
   };
 
+  type ReferralStats = {
+    referralCode : Text;
+    totalReferrals : Nat;
+    verifiedReferrals : Nat;
+    balance : Nat;
+  };
+
+  // New type for emoji reactions
+  type EmojiReactions = Map.Map<Text, Set.Set<Principal>>;
+
+  // State variables
   let userProfiles = Map.empty<Principal, UserProfile>();
-  let posts = Map.empty<Nat, Post>();
   var nextPostId = 0;
-  let comments = Map.empty<Nat, Comment>();
+  let posts = Map.empty<Nat, Post>();
   var nextCommentId = 0;
+  let comments = Map.empty<Nat, Comment>();
   let likes = Map.empty<Nat, Set.Set<Principal>>();
-  let notifications = Map.empty<Nat, Notification>();
   var nextNotificationId = 0;
+  let notifications = Map.empty<Nat, Notification>();
   let friendRequests = Map.empty<Principal, Map.Map<Principal, RequestStatus>>();
   let followers = Map.empty<Principal, Set.Set<Principal>>();
   let following = Map.empty<Principal, Set.Set<Principal>>();
-  let storeListings = Map.empty<Nat, StoreListing>();
   var nextListingId = 0;
+  let storeListings = Map.empty<Nat, StoreListing>();
   let videoCalls = Map.empty<Text, VideoCall>();
-  let directMessages = Map.empty<Nat, DirectMessage>();
   var nextMessageId = 0;
-
-  // New state for groups, group messages, and reels
-  let groups = Map.empty<Nat, Group>();
+  let directMessages = Map.empty<Nat, DirectMessage>();
   var nextGroupId = 0;
-  let groupMessages = Map.empty<Nat, GroupMessage>();
+  let groups = Map.empty<Nat, Group>();
   var nextGroupMessageId = 0;
-  let reels = Map.empty<Nat, Reel>();
+  let groupMessages = Map.empty<Nat, GroupMessage>();
   var nextReelId = 0;
-
-  // New maps for credentials
+  let reels = Map.empty<Nat, Reel>();
   let usernameToCredential = Map.empty<Text, UserCredential>();
   let principalToUsername = Map.empty<Principal, Text>();
 
-  func compareTime(a : Time.Time, b : Time.Time) : Order.Order {
-    if (a < b) { #less } else if (a > b) { #greater } else { #equal };
-  };
+  // New emoji reactions state
+  let emojiReactions = Map.empty<Nat, EmojiReactions>();
 
-  module Post {
-    public func compareByTimestamp(a : Post, b : Post) : Order.Order {
-      compareTime(a.timestamp, b.timestamp);
-    };
-  };
-
-  module StoreListing {
-    public func compareByTimestamp(a : StoreListing, b : StoreListing) : Order.Order {
-      compareTime(a.timestamp, b.timestamp);
-    };
-  };
-
-  module DirectMessage {
-    public func compareByTimestamp(a : DirectMessage, b : DirectMessage) : Order.Order {
-      compareTime(a.timestamp, b.timestamp);
-    };
-  };
-
-  module GroupMessage {
-    public func compareByTimestamp(a : GroupMessage, b : GroupMessage) : Order.Order {
-      compareTime(a.timestamp, b.timestamp);
-    };
-  };
-
-  module Reel {
-    public func compareByTimestampDescending(a : Reel, b : Reel) : Order.Order {
-      compareTime(b.timestamp, a.timestamp);
-    };
-  };
+  // Referral system state
+  var nextReferralCode = 1;
+  let referralCodeToReferrer = Map.empty<Text, Principal>();
+  let referralStats = Map.empty<Principal, ReferralStats>();
+  let userToReferrer = Map.empty<Principal, Principal>();
+  let verifiedUsers = Set.empty<Principal>();
 
   // Credential System Functions
-
   public shared ({ caller }) func registerWithCredentials(username : Text, password : Text) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can register credentials");
     };
-    // Check if username exists
+    // Check username existence
     switch (usernameToCredential.get(username)) {
       case (?_) { Runtime.trap("Username already taken") };
       case (null) {
@@ -215,7 +197,7 @@ actor {
         switch (principalToUsername.get(caller)) {
           case (?_) { Runtime.trap("This principal already has a username") };
           case (null) {
-            let credential : UserCredential = {
+            let credential = {
               username;
               passwordHash = password;
               principalId = caller;
@@ -226,7 +208,7 @@ actor {
             // Create default user profile if none exists yet
             switch (userProfiles.get(caller)) {
               case (null) {
-                let defaultProfile : UserProfile = {
+                let defaultProfile = {
                   displayName = username;
                   bio = "";
                   avatar = null;
@@ -236,9 +218,7 @@ actor {
                 };
                 userProfiles.add(caller, defaultProfile);
               };
-              case (?_) {
-                // Do nothing if profile already exists
-              };
+              case (?_) {};
             };
           };
         };
@@ -268,7 +248,6 @@ actor {
   };
 
   // User Profile Management
-
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can view profiles");
@@ -295,14 +274,13 @@ actor {
   };
 
   // Posts
-
   public shared ({ caller }) func createPost(content : Text, image : ?Storage.ExternalBlob) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can create posts");
     };
     let postId = nextPostId;
     nextPostId += 1;
-    let post : Post = {
+    let post = {
       id = postId;
       content;
       image;
@@ -313,11 +291,11 @@ actor {
   };
 
   public query ({ caller }) func getAllPosts() : async [Post] {
-    posts.values().toArray().sort(Post.compareByTimestamp);
+    posts.values().toArray();
   };
 
   public query ({ caller }) func getPostsByUser(user : Principal) : async [Post] {
-    posts.values().toArray().filter(func(p) { p.author == user });
+    posts.values().toArray().filter(func(p : Post) : Bool { p.author == user });
   };
 
   public shared ({ caller }) func likeOrUnlikePost(postId : Nat) : async () {
@@ -348,14 +326,13 @@ actor {
   };
 
   // Comments
-
   public shared ({ caller }) func addComment(postId : Nat, content : Text) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can add comments");
     };
     let commentId = nextCommentId;
     nextCommentId += 1;
-    let comment : Comment = {
+    let comment = {
       id = commentId;
       postId;
       content;
@@ -365,17 +342,119 @@ actor {
     comments.add(commentId, comment);
   };
 
+  public shared ({ caller }) func deleteComment(commentId : Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can delete comments");
+    };
+    let comment = switch (comments.get(commentId)) {
+      case (null) { Runtime.trap("Comment not found") };
+      case (?comment) { comment };
+    };
+    if (comment.author != caller) {
+      Runtime.trap("Unauthorized: Only the comment author can delete this comment");
+    };
+    comments.remove(commentId);
+  };
+
+  public shared ({ caller }) func deletePost(postId : Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can delete posts");
+    };
+    let post = switch (posts.get(postId)) {
+      case (null) { Runtime.trap("Post not found") };
+      case (?post) { post };
+    };
+    if (post.author != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only the post author or admin can delete this post");
+    };
+    posts.remove(postId);
+
+    // Remove all comments for this post
+    let entries = comments.entries().toArray();
+    for ((id, comment) in entries.values()) {
+      if (comment.postId == postId) {
+        comments.remove(id);
+      };
+    };
+  };
+
   public query ({ caller }) func getCommentsByPost(postId : Nat) : async [Comment] {
-    comments.values().toArray().filter(func(c) { c.postId == postId });
+    comments.values().toArray().filter(func(c : Comment) : Bool { c.postId == postId });
+  };
+
+  public query ({ caller }) func checkCallerHasLiked(postId : Nat) : async Bool {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can check like status");
+    };
+    switch (likes.get(postId)) {
+      case (null) { false };
+      case (?likeSet) { likeSet.contains(caller) };
+    };
+  };
+
+  // Emoji reactions
+  public shared ({ caller }) func addEmojiReaction(postId : Nat, emoji : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can add emoji reactions");
+    };
+    var postEmojiReactions = switch (emojiReactions.get(postId)) {
+      case (null) { Map.empty<Text, Set.Set<Principal>>() };
+      case (?reactions) { reactions };
+    };
+
+    let currentUsers = switch (postEmojiReactions.get(emoji)) {
+      case (null) { Set.empty<Principal>() };
+      case (?users) { users };
+    };
+
+    if (currentUsers.contains(caller)) {
+      currentUsers.remove(caller);
+    } else {
+      currentUsers.add(caller);
+    };
+
+    postEmojiReactions.add(emoji, currentUsers);
+    emojiReactions.add(postId, postEmojiReactions);
+  };
+
+  public shared ({ caller }) func removeEmojiReaction(postId : Nat, emoji : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can remove emoji reactions");
+    };
+    switch (emojiReactions.get(postId)) {
+      case (null) { Runtime.trap("No reactions for this post") };
+      case (?postEmojiReactions) {
+        switch (postEmojiReactions.get(emoji)) {
+          case (null) { Runtime.trap("No users for this emoji") };
+          case (?users) {
+            users.remove(caller);
+            postEmojiReactions.add(emoji, users);
+            emojiReactions.add(postId, postEmojiReactions);
+          };
+        };
+      };
+    };
+  };
+
+  public query ({ caller }) func getEmojiReactions(postId : Nat) : async [(Text, Nat)] {
+    switch (emojiReactions.get(postId)) {
+      case (null) { [] };
+      case (?postEmojiReactions) {
+        postEmojiReactions.entries().toArray().map(
+          func((emoji, users)) { (emoji, users.size()) }
+        );
+      };
+    };
   };
 
   // Friends & Followers
-
   public query ({ caller }) func getFriends(user : Principal) : async [Principal] {
     switch (friendRequests.get(user)) {
       case (null) { [] };
       case (?requests) {
-        requests.entries().toArray().filter(func((_, status)) { status == #accepted }).map(func((principal, _)) { principal });
+        requests.entries().toArray().filter(func((p : Principal, status : RequestStatus)) : Bool {
+          status == #accepted
+        }).map(func((p : Principal, _ : RequestStatus)) : Principal { p });
       };
     };
   };
@@ -426,6 +505,39 @@ actor {
             friendRequests.add(from, fromRequests);
           };
           case (_) { Runtime.trap("Friend request already processed") };
+        };
+      };
+    };
+  };
+
+  public query ({ caller }) func getPendingFriendRequests() : async [{ from : Principal; timestamp : Time.Time }] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can view friend requests");
+    };
+    switch (friendRequests.get(caller)) {
+      case (null) { [] };
+      case (?requests) {
+        requests.entries().toArray().filter(func((p : Principal, status : RequestStatus)) : Bool {
+          status == #pending
+        }).map(func((p : Principal, _ : RequestStatus)) : { from : Principal; timestamp : Time.Time } {
+          { from = p; timestamp = Time.now() };
+        });
+      };
+    };
+  };
+
+  public query ({ caller }) func checkFriendRequestStatus(user : Principal) : async ?Text {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can check friend request status");
+    };
+    switch (friendRequests.get(caller)) {
+      case (null) { null };
+      case (?requests) {
+        switch (requests.get(user)) {
+          case (null) { null };
+          case (?#pending) { ?"pending" };
+          case (?#accepted) { ?"accepted" };
+          case (?#declined) { ?"declined" };
         };
       };
     };
@@ -493,83 +605,133 @@ actor {
     };
   };
 
-  // Direct Messaging
+  // Store Listings
+  public shared ({ caller }) func createStoreListing(title : Text, description : Text, price : Text, image : ?Storage.ExternalBlob) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can create store listings");
+    };
+    let listingId = nextListingId;
+    nextListingId += 1;
+    let listing = {
+      id = listingId;
+      title;
+      description;
+      price;
+      image;
+      seller = caller;
+      timestamp = Time.now();
+    };
+    storeListings.add(listingId, listing);
+  };
 
-  public shared ({ caller }) func sendMessage(to : Principal, content : Text) : async () {
+  public query ({ caller }) func getAllStoreListings() : async [StoreListing] {
+    storeListings.values().toArray();
+  };
+
+  public query ({ caller }) func getStoreListingsByUser(user : Principal) : async [StoreListing] {
+    storeListings.values().toArray().filter(func(l : StoreListing) : Bool { l.seller == user });
+  };
+
+  public shared ({ caller }) func deleteStoreListing(id : Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can delete store listings");
+    };
+    switch (storeListings.get(id)) {
+      case (null) { Runtime.trap("Listing not found") };
+      case (?listing) {
+        if (listing.seller != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+          Runtime.trap("Unauthorized: Only the seller or admin can delete this listing");
+        };
+        storeListings.remove(id);
+      };
+    };
+  };
+
+  // Notifications
+  public query ({ caller }) func getNotifications() : async [Notification] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get notifications");
+    };
+    notifications.values().toArray().filter(func(n : Notification) : Bool { n.recipient == caller });
+  };
+
+  public shared ({ caller }) func markNotificationAsRead(id : Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can mark notifications as read");
+    };
+    switch (notifications.get(id)) {
+      case (?notification) {
+        if (notification.recipient != caller) {
+          Runtime.trap("Unauthorized: Only recipient can mark this notification as read");
+        };
+        notifications.add(id, { notification with read = true });
+      };
+      case (null) {};
+    };
+  };
+
+  // Direct Messaging
+  public shared ({ caller }) func sendMessage(recipientId : Principal, content : Text) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can send messages");
     };
-
     let messageId = nextMessageId;
     nextMessageId += 1;
-
-    let message : DirectMessage = {
+    let message = {
       id = messageId;
       senderId = caller;
-      recipientId = to;
+      recipientId;
       content;
       timestamp = Time.now();
       read = false;
     };
-
     directMessages.add(messageId, message);
+    messageId;
   };
 
   public query ({ caller }) func getConversation(otherUser : Principal) : async [DirectMessage] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can view conversations");
     };
-
-    let conversation = List.empty<DirectMessage>();
-
-    for ((_, message) in directMessages.entries()) {
-      if ((message.senderId == caller and message.recipientId == otherUser) or (message.senderId == otherUser and message.recipientId == caller)) {
-        conversation.add(message);
-      };
-    };
-
-    let conversationArray = conversation.toArray().sort(DirectMessage.compareByTimestamp);
-    conversationArray;
+    directMessages.values().toArray().filter(func(msg : DirectMessage) : Bool {
+      (msg.senderId == caller and msg.recipientId == otherUser) or
+      (msg.senderId == otherUser and msg.recipientId == caller)
+    });
   };
 
   public query ({ caller }) func getConversations() : async [Principal] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view their conversations");
+      Runtime.trap("Unauthorized: Only users can view conversations");
     };
-
-    let contacts = Set.empty<Principal>();
-
-    for ((_, message) in directMessages.entries()) {
-      if (message.senderId == caller) {
-        contacts.add(message.recipientId);
-      } else if (message.recipientId == caller) {
-        contacts.add(message.senderId);
+    let conversationSet = Set.empty<Principal>();
+    for (msg in directMessages.values()) {
+      if (msg.senderId == caller) {
+        conversationSet.add(msg.recipientId);
+      } else if (msg.recipientId == caller) {
+        conversationSet.add(msg.senderId);
       };
     };
-
-    contacts.toArray();
+    conversationSet.toArray();
   };
 
   public shared ({ caller }) func markConversationRead(otherUser : Principal) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can mark conversations as read");
     };
-
-    for ((id, message) in directMessages.entries()) {
-      if (message.senderId == otherUser and message.recipientId == caller and not message.read) {
-        directMessages.add(id, { message with read = true });
+    for ((id, msg) in directMessages.entries()) {
+      if (msg.senderId == otherUser and msg.recipientId == caller and not msg.read) {
+        directMessages.add(id, { msg with read = true });
       };
     };
   };
 
   public query ({ caller }) func getUnreadMessageCount() : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view their unread message count");
+      Runtime.trap("Unauthorized: Only users can view unread message count");
     };
-
     var count = 0;
-    for ((_, message) in directMessages.entries()) {
-      if (message.recipientId == caller and not message.read) {
+    for (msg in directMessages.values()) {
+      if (msg.recipientId == caller and not msg.read) {
         count += 1;
       };
     };
@@ -577,14 +739,13 @@ actor {
   };
 
   // Groups
-
   public shared ({ caller }) func createGroup(name : Text) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can create groups");
     };
     let groupId = nextGroupId;
     nextGroupId += 1;
-    let group : Group = {
+    let group = {
       id = groupId;
       name;
       creatorId = caller;
@@ -597,29 +758,29 @@ actor {
 
   public query ({ caller }) func getMyGroups() : async [Group] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view groups");
+      Runtime.trap("Unauthorized: Only users can view their groups");
     };
-    let groupsArray = groups.values().toArray();
-    groupsArray.filter(func(g) { g.memberIds.any(func(m) { m == caller }) });
+    groups.values().toArray().filter(func(g : Group) : Bool {
+      g.memberIds.any(func(m : Principal) : Bool { m == caller })
+    });
   };
 
-  public query ({ caller }) func getGroupById(id : Nat) : async ?Group {
+  public query ({ caller }) func getGroupById(groupId : Nat) : async ?Group {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can view groups");
     };
-    switch (groups.get(id)) {
+    switch (groups.get(groupId)) {
       case (null) { null };
       case (?group) {
-        // Only group members can view group details
-        if (not group.memberIds.any(func(m) { m == caller })) {
-          Runtime.trap("Unauthorized: Only group members can view group details");
+        if (not group.memberIds.any(func(m : Principal) : Bool { m == caller })) {
+          Runtime.trap("Unauthorized: Only group members can view this group");
         };
         ?group;
       };
     };
   };
 
-  public shared ({ caller }) func addGroupMember(groupId : Nat, member : Principal) : async () {
+  public shared ({ caller }) func addGroupMember(groupId : Nat, memberId : Principal) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can add group members");
     };
@@ -627,36 +788,29 @@ actor {
       case (null) { Runtime.trap("Group not found") };
       case (?group) {
         if (group.creatorId != caller) {
-          Runtime.trap("Unauthorized: Only group creator can add members");
+          Runtime.trap("Unauthorized: Only the group creator can add members");
         };
-        let currentMembers = group.memberIds;
-        if (currentMembers.any(func(m) { m == member })) {
-          Runtime.trap("User is already a group member");
+        if (group.memberIds.any(func(m : Principal) : Bool { m == memberId })) {
+          Runtime.trap("User is already a member");
         };
-        let updatedMembers = currentMembers.concat([member]);
-        groups.add(groupId, { group with memberIds = updatedMembers });
+        let newMembers = group.memberIds.concat([memberId]);
+        groups.add(groupId, { group with memberIds = newMembers });
       };
     };
   };
 
-  public shared ({ caller }) func removeGroupMember(groupId : Nat, member : Principal) : async () {
+  public shared ({ caller }) func removeGroupMember(groupId : Nat, memberId : Principal) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can remove group members");
     };
     switch (groups.get(groupId)) {
       case (null) { Runtime.trap("Group not found") };
       case (?group) {
-        if (group.creatorId != caller and caller != member) {
-          Runtime.trap("Unauthorized: Only group creator or self can remove member");
+        if (group.creatorId != caller) {
+          Runtime.trap("Unauthorized: Only the group creator can remove members");
         };
-        if (not group.memberIds.any(func(m) { m == member })) {
-          Runtime.trap("User is not a group member");
-        };
-        let updatedMembers = group.memberIds.filter(func(m) { m != member });
-        if (updatedMembers.size() == 0) {
-          Runtime.trap("Group must have at least one member");
-        };
-        groups.add(groupId, { group with memberIds = updatedMembers });
+        let newMembers = group.memberIds.filter(func(m : Principal) : Bool { m != memberId });
+        groups.add(groupId, { group with memberIds = newMembers });
       };
     };
   };
@@ -668,15 +822,13 @@ actor {
     switch (groups.get(groupId)) {
       case (null) { Runtime.trap("Group not found") };
       case (?group) {
-        if (group.creatorId != caller) {
-          Runtime.trap("Unauthorized: Only group creator can delete group");
+        if (group.creatorId != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+          Runtime.trap("Unauthorized: Only the group creator or admin can delete this group");
         };
         groups.remove(groupId);
       };
     };
   };
-
-  // Group Messages
 
   public shared ({ caller }) func sendGroupMessage(groupId : Nat, content : Text) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -685,12 +837,12 @@ actor {
     switch (groups.get(groupId)) {
       case (null) { Runtime.trap("Group not found") };
       case (?group) {
-        if (not group.memberIds.any(func(m) { m == caller })) {
+        if (not group.memberIds.any(func(m : Principal) : Bool { m == caller })) {
           Runtime.trap("Unauthorized: Only group members can send messages");
         };
         let messageId = nextGroupMessageId;
         nextGroupMessageId += 1;
-        let message : GroupMessage = {
+        let message = {
           id = messageId;
           groupId;
           senderId = caller;
@@ -710,24 +862,22 @@ actor {
     switch (groups.get(groupId)) {
       case (null) { Runtime.trap("Group not found") };
       case (?group) {
-        if (not group.memberIds.any(func(m) { m == caller })) {
+        if (not group.memberIds.any(func(m : Principal) : Bool { m == caller })) {
           Runtime.trap("Unauthorized: Only group members can read messages");
         };
-        let messagesArray = groupMessages.values().toArray().filter(func(msg) { msg.groupId == groupId });
-        messagesArray.sort(GroupMessage.compareByTimestamp);
+        groupMessages.values().toArray().filter(func(msg : GroupMessage) : Bool { msg.groupId == groupId });
       };
     };
   };
 
   // Reels
-
   public shared ({ caller }) func createReel(title : Text, video : Storage.ExternalBlob) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can create reels");
     };
     let reelId = nextReelId;
     nextReelId += 1;
-    let reel : Reel = {
+    let reel = {
       id = reelId;
       title;
       video;
@@ -739,11 +889,11 @@ actor {
   };
 
   public query ({ caller }) func getAllReels() : async [Reel] {
-    reels.values().toArray().sort(Reel.compareByTimestampDescending);
+    reels.values().toArray();
   };
 
   public query ({ caller }) func getReelsByUser(user : Principal) : async [Reel] {
-    reels.values().toArray().filter(func(r) { r.creatorId == user });
+    reels.values().toArray().filter(func(r : Reel) : Bool { r.creatorId == user });
   };
 
   public shared ({ caller }) func deleteReel(id : Nat) : async () {
@@ -758,6 +908,271 @@ actor {
         };
         reels.remove(id);
       };
+    };
+  };
+
+  // WebRTC Signaling
+  public shared ({ caller }) func storeCallOffer(callId : Text, sdp : Text, callee : Principal) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can store call offers");
+    };
+    let offer = {
+      sdp;
+      caller;
+      callee;
+    };
+    let videoCall = {
+      offer;
+      answer = null;
+      candidates = [];
+    };
+    videoCalls.add(callId, videoCall);
+  };
+
+  public query ({ caller }) func getCallOffer(callId : Text) : async ?WebRTCOffer {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get call offers");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { null };
+      case (?call) {
+        if (call.offer.caller != caller and call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only call participants can view this offer");
+        };
+        ?call.offer;
+      };
+    };
+  };
+
+  public shared ({ caller }) func storeCallAnswer(callId : Text, sdp : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can store call answers");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { Runtime.trap("Call not found") };
+      case (?call) {
+        if (call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only the callee can answer this call");
+        };
+        let answer = {
+          sdp;
+          callee = caller;
+          caller = call.offer.caller;
+        };
+        videoCalls.add(callId, { call with answer = ?answer });
+      };
+    };
+  };
+
+  public query ({ caller }) func getCallAnswer(callId : Text) : async ?WebRTCAnswer {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get call answers");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { null };
+      case (?call) {
+        if (call.offer.caller != caller and call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only call participants can view this answer");
+        };
+        call.answer;
+      };
+    };
+  };
+
+  public shared ({ caller }) func addICECandidate(callId : Text, candidate : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can add ICE candidates");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { Runtime.trap("Call not found") };
+      case (?call) {
+        if (call.offer.caller != caller and call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only call participants can add ICE candidates");
+        };
+        let iceCandidate = {
+          candidate;
+          tenant = caller;
+        };
+        let newCandidates = call.candidates.concat([iceCandidate]);
+        videoCalls.add(callId, { call with candidates = newCandidates });
+      };
+    };
+  };
+
+  public query ({ caller }) func getICECandidates(callId : Text, forPrincipal : Principal) : async [Text] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get ICE candidates");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { [] };
+      case (?call) {
+        if (call.offer.caller != caller and call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only call participants can view ICE candidates");
+        };
+        call.candidates.filter(func(c : ICECandidate) : Bool { c.tenant == forPrincipal }).map(func(c : ICECandidate) : Text { c.candidate });
+      };
+    };
+  };
+
+  public shared ({ caller }) func endCall(callId : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can end calls");
+    };
+    switch (videoCalls.get(callId)) {
+      case (null) { Runtime.trap("Call not found") };
+      case (?call) {
+        if (call.offer.caller != caller and call.offer.callee != caller) {
+          Runtime.trap("Unauthorized: Only call participants can end this call");
+        };
+        videoCalls.remove(callId);
+      };
+    };
+  };
+
+  // Referral System Functions
+  public shared ({ caller }) func getMyReferralCode() : async Text {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get referral codes");
+    };
+
+    let existingCode = referralStats.get(caller);
+    switch (existingCode) {
+      case (?stats) {
+        stats.referralCode;
+      };
+      case (null) {
+        // Generate new referral code
+        let newCode = nextReferralCode.toText();
+        nextReferralCode += 1;
+
+        let newStats = {
+          referralCode = newCode;
+          totalReferrals = 0;
+          verifiedReferrals = 0;
+          balance = 0;
+        };
+        referralStats.add(caller, newStats);
+        referralCodeToReferrer.add(newCode, caller);
+        newCode;
+      };
+    };
+  };
+
+  public shared ({ caller }) func redeemReferralCode(code : Text) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can redeem referral codes");
+    };
+
+    // Check if user already has a referrer
+    switch (userToReferrer.get(caller)) {
+      case (?_) { Runtime.trap("User already has a referrer") };
+      case (null) {};
+    };
+
+    // Validate referral code and get referrer
+    let referrer = switch (referralCodeToReferrer.get(code)) {
+      case (null) { Runtime.trap("Invalid referral code") };
+      case (?ref) {
+        if (ref == caller) {
+          Runtime.trap("Cannot use your own referral code");
+        };
+        ref;
+      };
+    };
+
+    // Link user to referrer
+    userToReferrer.add(caller, referrer);
+
+    // Update referrer's stats
+    switch (referralStats.get(referrer)) {
+      case (?stats) {
+        let updatedStats = {
+          referralCode = stats.referralCode;
+          totalReferrals = stats.totalReferrals + 1;
+          verifiedReferrals = stats.verifiedReferrals;
+          balance = stats.balance;
+        };
+        referralStats.add(referrer, updatedStats);
+      };
+      case (null) {
+        // This shouldn't happen if referral code exists, but handle it
+        Runtime.trap("Referrer stats not found");
+      };
+    };
+  };
+
+  // Called by user after completing profile
+  public shared ({ caller }) func markAccountVerified() : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can mark account as verified");
+    };
+
+    // Check if already verified
+    if (verifiedUsers.contains(caller)) {
+      Runtime.trap("Account already verified");
+    };
+
+    // Mark user as verified
+    verifiedUsers.add(caller);
+
+    // Check if user has a referrer
+    switch (userToReferrer.get(caller)) {
+      case (null) {
+        // No referrer, nothing more to do
+      };
+      case (?referrer) {
+        // Update referrer's verified referral count
+        switch (referralStats.get(referrer)) {
+          case (?stats) {
+            let newVerifiedCount = stats.verifiedReferrals + 1;
+            var newBalance = stats.balance;
+
+            // Check milestone: 10 verified referrals = 100 Rs reward
+            if (newVerifiedCount % 10 == 0) {
+              newBalance += 100;
+            };
+
+            let updatedStats = {
+              referralCode = stats.referralCode;
+              totalReferrals = stats.totalReferrals;
+              verifiedReferrals = newVerifiedCount;
+              balance = newBalance;
+            };
+            referralStats.add(referrer, updatedStats);
+          };
+          case (null) {
+            // Referrer should have stats, but handle gracefully
+          };
+        };
+      };
+    };
+  };
+
+  public query ({ caller }) func getReferralStats() : async ReferralStats {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get referral stats");
+    };
+    switch (referralStats.get(caller)) {
+      case (?stats) { stats };
+      case (null) {
+        // Return default stats if user hasn't generated a referral code yet
+        {
+          referralCode = "";
+          totalReferrals = 0;
+          verifiedReferrals = 0;
+          balance = 0;
+        };
+      };
+    };
+  };
+
+  public query ({ caller }) func getMyBalance() : async Nat {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can get balance");
+    };
+    switch (referralStats.get(caller)) {
+      case (?stats) { stats.balance };
+      case (null) { 0 };
     };
   };
 };

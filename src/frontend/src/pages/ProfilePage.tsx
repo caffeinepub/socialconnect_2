@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { ExternalBlob, type UserProfile } from "../backend";
 import { PostCard } from "../components/PostCard";
 import { UserAvatar } from "../components/UserAvatar";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import type { StoreListing } from "../hooks/useQueries";
 import {
@@ -48,6 +49,7 @@ import {
   useGetFollowers,
   useGetFollowing,
   useGetFriends,
+  useGetMyUsername,
   useGetPostsByUser,
   useGetStoreListingsByUser,
   useSaveProfile,
@@ -113,6 +115,7 @@ function EditProfileModal({
     currentProfile.professionalTitle ?? "",
   );
   const saveProfile = useSaveProfile();
+  const { actor } = useActor();
   const avatarRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
@@ -166,6 +169,15 @@ function EditProfileModal({
         isProfessional,
         professionalTitle: professionalTitle.trim() || undefined,
       });
+
+      // Mark account as verified for referral tracking (silently)
+      try {
+        if (actor) {
+          await actor.markAccountVerified();
+        }
+      } catch {
+        // Silently swallow
+      }
 
       // cleanup
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -653,6 +665,7 @@ export function ProfilePage({ onOpenSettings }: ProfilePageProps) {
   const myPrincipal = identity?.getPrincipal() ?? null;
   const { data: profile, isLoading: profileLoading } =
     useGetCallerUserProfile();
+  const { data: myUsername } = useGetMyUsername();
   const { data: posts = [], isLoading: postsLoading } =
     useGetPostsByUser(myPrincipal);
   const { data: friends = [], isLoading: friendsLoading } =
@@ -673,6 +686,7 @@ export function ProfilePage({ onOpenSettings }: ProfilePageProps) {
   });
 
   const coverUrl = profile?.coverPhoto?.getDirectURL();
+  const displayName = profile?.displayName || myUsername || "User";
 
   return (
     <div className="space-y-4">
@@ -739,7 +753,7 @@ export function ProfilePage({ onOpenSettings }: ProfilePageProps) {
             <>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-display font-bold text-foreground">
-                  {profile?.displayName ?? "Anonymous"}
+                  {displayName}
                 </h2>
                 {profile?.isProfessional && (
                   <Badge
@@ -1048,7 +1062,11 @@ export function ProfilePage({ onOpenSettings }: ProfilePageProps) {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           currentProfile={
-            profile ?? { displayName: "", bio: "", isProfessional: false }
+            profile ?? {
+              displayName: myUsername ?? "",
+              bio: "",
+              isProfessional: false,
+            }
           }
         />
       )}

@@ -9,6 +9,7 @@ import {
   Heart,
   MessageCircle,
   Send,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -19,10 +20,12 @@ import type { Comment, Post } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useAddComment,
+  useAddEmojiReaction,
   useCheckCallerHasLiked,
   useDeleteComment,
   useDeletePost,
   useGetCommentsByPost,
+  useGetEmojiReactions,
   useGetLikesCount,
   useLikeOrUnlikePost,
 } from "../hooks/useQueries";
@@ -98,6 +101,8 @@ function CommentItem({
   );
 }
 
+const EMOJI_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
+
 export function PostCard({ post, onDelete }: PostCardProps) {
   const { identity } = useInternetIdentity();
   const { getProfile } = useUserProfileCache();
@@ -112,6 +117,8 @@ export function PostCard({ post, onDelete }: PostCardProps) {
     useGetCommentsByPost(post.id);
   const addComment = useAddComment();
   const deletePost = useDeletePost();
+  const { data: emojiReactions = [] } = useGetEmojiReactions(post.id);
+  const addEmojiReaction = useAddEmojiReaction();
 
   const currentPrincipal = identity?.getPrincipal().toString() ?? null;
   const isOwn = currentPrincipal === post.author.toString();
@@ -153,6 +160,40 @@ export function PostCard({ post, onDelete }: PostCardProps) {
       onError: () => toast.error("Failed to delete post"),
     });
   };
+
+  const handleShare = async () => {
+    const authorName =
+      authorProfile?.displayName ?? post.author.toString().slice(0, 8);
+    const shareText = `${authorName}: ${post.content}`;
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        toast.success("Post copied to clipboard!");
+      } else {
+        const preview =
+          shareText.length > 80 ? `${shareText.slice(0, 80)}…` : shareText;
+        toast.info(`Share: ${preview}`);
+      }
+    } catch {
+      const preview =
+        shareText.length > 80 ? `${shareText.slice(0, 80)}…` : shareText;
+      toast.info(`Share: ${preview}`);
+    }
+  };
+
+  const handleEmojiReaction = (emoji: string) => {
+    if (!identity) {
+      toast.error("Sign in to react to posts");
+      return;
+    }
+    addEmojiReaction.mutate(
+      { postId: post.id, emoji },
+      { onError: () => toast.error("Failed to add reaction") },
+    );
+  };
+
+  // Build a map of emoji -> count from reaction data
+  const reactionMap = new Map<string, bigint>(emojiReactions);
 
   return (
     <motion.article
@@ -206,6 +247,35 @@ export function PostCard({ post, onDelete }: PostCardProps) {
         </div>
       )}
 
+      {/* Emoji Reactions Bar */}
+      <div className="px-4 pb-2 flex items-center gap-1.5 flex-wrap">
+        {EMOJI_REACTIONS.map((emoji) => {
+          const count = reactionMap.get(emoji) ?? 0n;
+          return (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => handleEmojiReaction(emoji)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm transition-all duration-150 active:scale-95 select-none",
+                "border border-border/50 hover:border-border hover:bg-muted/80",
+                count > 0n
+                  ? "bg-muted/60 shadow-sm"
+                  : "bg-transparent opacity-60 hover:opacity-100",
+              )}
+              title={`React with ${emoji}`}
+            >
+              <span className="leading-none">{emoji}</span>
+              {count > 0n && (
+                <span className="text-xs font-medium text-muted-foreground leading-none tabular-nums">
+                  {count.toString()}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Stats */}
       <div className="px-4 py-1.5 flex items-center gap-3 border-t border-border/60">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -253,6 +323,14 @@ export function PostCard({ post, onDelete }: PostCardProps) {
           ) : (
             <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
           )}
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted/80 rounded-lg transition-all duration-150 active:scale-95"
+        >
+          <Share2 className="w-4 h-4" strokeWidth={1.5} />
+          Share
         </button>
       </div>
 

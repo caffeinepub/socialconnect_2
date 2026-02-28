@@ -44,6 +44,19 @@ export enum RequestStatus {
 
 // ── Profile ───────────────────────────────────────────────────────────────
 
+export function useGetMyUsername() {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<string | null>({
+    queryKey: ["myUsername"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.getMyUsername();
+    },
+    enabled: !!actor && !actorFetching,
+    retry: false,
+  });
+}
+
 export function useGetCallerUserProfile() {
   const { actor, isFetching: actorFetching } = useActor();
   const query = useQuery<UserProfile | null>({
@@ -140,7 +153,7 @@ export function useDeletePost() {
     mutationFn: async (postId: bigint) => {
       if (!actor) throw new Error("Actor not available");
 
-      await (actor as any).deletePost(postId);
+      await actor.deletePost(postId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allPosts"] });
@@ -175,7 +188,7 @@ export function useCheckCallerHasLiked(postId: bigint) {
     queryFn: async () => {
       if (!actor || !identity) return false;
       try {
-        return await (actor as any).checkCallerHasLiked(postId);
+        return await actor.checkCallerHasLiked(postId);
       } catch {
         return false;
       }
@@ -251,11 +264,44 @@ export function useDeleteComment() {
     }: { commentId: bigint; postId: bigint }) => {
       if (!actor) throw new Error("Actor not available");
 
-      await (actor as any).deleteComment(commentId);
+      await actor.deleteComment(commentId);
     },
     onSuccess: (_, { postId }) => {
       queryClient.invalidateQueries({
         queryKey: ["comments", postId.toString()],
+      });
+    },
+  });
+}
+
+// ── Emoji Reactions ───────────────────────────────────────────────────────
+
+export function useGetEmojiReactions(postId: bigint) {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<Array<[string, bigint]>>({
+    queryKey: ["emojiReactions", postId.toString()],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getEmojiReactions(postId);
+    },
+    enabled: !!actor && !actorFetching,
+  });
+}
+
+export function useAddEmojiReaction() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      emoji,
+    }: { postId: bigint; emoji: string }) => {
+      if (!actor) throw new Error("Actor not available");
+      await actor.addEmojiReaction(postId, emoji);
+    },
+    onSuccess: (_, { postId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ["emojiReactions", postId.toString()],
       });
     },
   });
@@ -711,6 +757,66 @@ export function useSendGroupMessage() {
         queryKey: ["groupMessages", groupId.toString()],
       });
     },
+  });
+}
+
+// ── Referral ──────────────────────────────────────────────────────────────
+
+export interface ReferralStats {
+  referralCode: string;
+  balance: bigint;
+  totalReferrals: bigint;
+  verifiedReferrals: bigint;
+}
+
+export function useGetMyReferralCode() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  return useQuery<string>({
+    queryKey: ["myReferralCode"],
+    queryFn: async () => {
+      if (!actor) return "";
+      try {
+        return await actor.getMyReferralCode();
+      } catch {
+        return "";
+      }
+    },
+    enabled: !!actor && !actorFetching && !!identity,
+  });
+}
+
+export function useGetReferralStats() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  return useQuery<ReferralStats | null>({
+    queryKey: ["referralStats"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        return await actor.getReferralStats();
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !actorFetching && !!identity,
+  });
+}
+
+export function useGetMyBalance() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  return useQuery<bigint>({
+    queryKey: ["myBalance"],
+    queryFn: async () => {
+      if (!actor) return 0n;
+      try {
+        return await actor.getMyBalance();
+      } catch {
+        return 0n;
+      }
+    },
+    enabled: !!actor && !actorFetching && !!identity,
   });
 }
 

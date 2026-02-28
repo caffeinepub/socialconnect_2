@@ -6,6 +6,7 @@ import {
   Bell,
   Eye,
   EyeOff,
+  Gift,
   Loader2,
   MessageCircle,
   Phone,
@@ -18,7 +19,12 @@ import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 type PendingOp =
   | { mode: "login"; username: string; password: string }
-  | { mode: "register"; username: string; password: string };
+  | {
+      mode: "register";
+      username: string;
+      password: string;
+      referralCode: string;
+    };
 
 type FormError = string | null;
 
@@ -71,6 +77,11 @@ export function LoginPage() {
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
+  const [regReferralCode, setRegReferralCode] = useState(() => {
+    // Pre-fill from URL ?ref= param
+    const params = new URLSearchParams(window.location.search);
+    return params.get("ref") ?? "";
+  });
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirm, setShowRegConfirm] = useState(false);
   const [regError, setRegError] = useState<FormError>(null);
@@ -115,6 +126,14 @@ export function LoginPage() {
           // register
           await actor.registerWithCredentials(op.username, op.password);
           if (cancelled) return;
+          // Redeem referral code silently if one was provided
+          if (op.referralCode.trim()) {
+            try {
+              await actor.redeemReferralCode(op.referralCode.trim());
+            } catch {
+              // Silently swallow — referral code errors should not block registration
+            }
+          }
           // Success — App.tsx handles navigation
           setPendingOp(null);
         }
@@ -206,7 +225,12 @@ export function LoginPage() {
       return;
     }
 
-    setPendingOp({ mode: "register", username, password: regPassword });
+    setPendingOp({
+      mode: "register",
+      username,
+      password: regPassword,
+      referralCode: regReferralCode,
+    });
     login();
   };
 
@@ -258,7 +282,7 @@ export function LoginPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <img
-                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+                src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
                 alt="S Connect logo"
                 className="w-12 h-12 object-contain"
               />
@@ -313,7 +337,7 @@ export function LoginPage() {
             {/* Logo */}
             <div className="text-center mb-6">
               <img
-                src="/assets/generated/sconnect-logo-transparent.dim_200x200.png"
+                src="/assets/uploads/Gemini_Generated_Image_rdewperdewperdew-1.png"
                 alt="S Connect logo"
                 className="w-14 h-14 mx-auto mb-3 object-contain"
               />
@@ -667,6 +691,38 @@ export function LoginPage() {
                         )}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Referral Code (optional) */}
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="reg-referral"
+                      className="text-sm font-medium flex items-center gap-1.5"
+                    >
+                      <Gift
+                        className="w-3.5 h-3.5"
+                        style={{ color: "oklch(0.65 0.22 48)" }}
+                      />
+                      Referral Code{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </Label>
+                    <Input
+                      id="reg-referral"
+                      type="text"
+                      placeholder="Enter code to earn ₹100 bonus"
+                      value={regReferralCode}
+                      onChange={(e) =>
+                        setRegReferralCode(e.target.value.toUpperCase())
+                      }
+                      disabled={isBusy}
+                      className="h-11 rounded-xl font-mono tracking-widest uppercase"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Have a friend's referral code? Enter it here.
+                    </p>
                   </div>
 
                   <AnimatePresence>

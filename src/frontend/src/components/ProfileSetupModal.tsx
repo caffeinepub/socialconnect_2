@@ -9,18 +9,33 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useActor } from "../hooks/useActor";
 import { useSaveProfile } from "../hooks/useQueries";
 
 interface ProfileSetupModalProps {
   open: boolean;
+  defaultUsername?: string | null;
 }
 
-export function ProfileSetupModal({ open }: ProfileSetupModalProps) {
-  const [displayName, setDisplayName] = useState("");
+export function ProfileSetupModal({
+  open,
+  defaultUsername,
+}: ProfileSetupModalProps) {
+  const [displayName, setDisplayName] = useState(defaultUsername ?? "");
   const [bio, setBio] = useState("");
+  const prefilled = useRef(false);
+
+  // Update display name when defaultUsername becomes available (async load)
+  useEffect(() => {
+    if (defaultUsername && !prefilled.current) {
+      prefilled.current = true;
+      setDisplayName(defaultUsername);
+    }
+  }, [defaultUsername]);
   const { mutateAsync: saveProfile, isPending } = useSaveProfile();
+  const { actor } = useActor();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +49,14 @@ export function ProfileSetupModal({ open }: ProfileSetupModalProps) {
         bio: bio.trim(),
         isProfessional: false,
       });
+      // Mark account as verified for referral tracking (silently)
+      try {
+        if (actor) {
+          await actor.markAccountVerified();
+        }
+      } catch {
+        // Silently swallow — this should not block profile creation
+      }
       toast.success("Profile created! Welcome to SocialSpace 🎉");
     } catch {
       toast.error("Failed to create profile. Please try again.");

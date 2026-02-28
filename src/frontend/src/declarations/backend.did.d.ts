@@ -40,6 +40,13 @@ export interface GroupMessage {
   'timestamp' : Time,
   'senderId' : Principal,
 }
+export interface Notification {
+  'id' : bigint,
+  'read' : boolean,
+  'recipient' : Principal,
+  'message' : string,
+  'timestamp' : Time,
+}
 export interface Post {
   'id' : bigint,
   'content' : string,
@@ -54,6 +61,21 @@ export interface Reel {
   'creatorId' : Principal,
   'timestamp' : Time,
 }
+export interface ReferralStats {
+  'referralCode' : string,
+  'balance' : bigint,
+  'totalReferrals' : bigint,
+  'verifiedReferrals' : bigint,
+}
+export interface StoreListing {
+  'id' : bigint,
+  'title' : string,
+  'description' : string,
+  'seller' : Principal,
+  'timestamp' : Time,
+  'image' : [] | [ExternalBlob],
+  'price' : string,
+}
 export type Time = bigint;
 export interface UserProfile {
   'bio' : string,
@@ -66,6 +88,16 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface WebRTCAnswer {
+  'sdp' : string,
+  'callee' : Principal,
+  'caller' : Principal,
+}
+export interface WebRTCOffer {
+  'sdp' : string,
+  'callee' : Principal,
+  'caller' : Principal,
+}
 export interface _CaffeineStorageCreateCertificateResult {
   'method' : string,
   'blob_hash' : string,
@@ -95,46 +127,78 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addComment' : ActorMethod<[bigint, string], undefined>,
+  'addEmojiReaction' : ActorMethod<[bigint, string], undefined>,
   'addGroupMember' : ActorMethod<[bigint, Principal], undefined>,
+  'addICECandidate' : ActorMethod<[string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'checkCallerHasLiked' : ActorMethod<[bigint], boolean>,
+  'checkFriendRequestStatus' : ActorMethod<[Principal], [] | [string]>,
   'checkUsernameAvailable' : ActorMethod<[string], boolean>,
   'createGroup' : ActorMethod<[string], bigint>,
   'createPost' : ActorMethod<[string, [] | [ExternalBlob]], undefined>,
   'createReel' : ActorMethod<[string, ExternalBlob], bigint>,
+  'createStoreListing' : ActorMethod<
+    [string, string, string, [] | [ExternalBlob]],
+    undefined
+  >,
+  'deleteComment' : ActorMethod<[bigint], undefined>,
   'deleteGroup' : ActorMethod<[bigint], undefined>,
+  'deletePost' : ActorMethod<[bigint], undefined>,
   'deleteReel' : ActorMethod<[bigint], undefined>,
+  'deleteStoreListing' : ActorMethod<[bigint], undefined>,
+  'endCall' : ActorMethod<[string], undefined>,
   'followUser' : ActorMethod<[Principal], undefined>,
   'getAllPosts' : ActorMethod<[], Array<Post>>,
   'getAllReels' : ActorMethod<[], Array<Reel>>,
+  'getAllStoreListings' : ActorMethod<[], Array<StoreListing>>,
   'getAllUsers' : ActorMethod<[], Array<Principal>>,
+  'getCallAnswer' : ActorMethod<[string], [] | [WebRTCAnswer]>,
+  'getCallOffer' : ActorMethod<[string], [] | [WebRTCOffer]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCommentsByPost' : ActorMethod<[bigint], Array<Comment>>,
   'getConversation' : ActorMethod<[Principal], Array<DirectMessage>>,
   'getConversations' : ActorMethod<[], Array<Principal>>,
+  'getEmojiReactions' : ActorMethod<[bigint], Array<[string, bigint]>>,
   'getFollowers' : ActorMethod<[Principal], Array<Principal>>,
   'getFollowing' : ActorMethod<[Principal], Array<Principal>>,
   'getFriends' : ActorMethod<[Principal], Array<Principal>>,
   'getGroupById' : ActorMethod<[bigint], [] | [Group]>,
   'getGroupMessages' : ActorMethod<[bigint], Array<GroupMessage>>,
+  'getICECandidates' : ActorMethod<[string, Principal], Array<string>>,
   'getLikesCount' : ActorMethod<[bigint], bigint>,
+  'getMyBalance' : ActorMethod<[], bigint>,
   'getMyGroups' : ActorMethod<[], Array<Group>>,
+  'getMyReferralCode' : ActorMethod<[], string>,
   'getMyUsername' : ActorMethod<[], [] | [string]>,
+  'getNotifications' : ActorMethod<[], Array<Notification>>,
+  'getPendingFriendRequests' : ActorMethod<
+    [],
+    Array<{ 'from' : Principal, 'timestamp' : Time }>
+  >,
   'getPostsByUser' : ActorMethod<[Principal], Array<Post>>,
   'getReelsByUser' : ActorMethod<[Principal], Array<Reel>>,
+  'getReferralStats' : ActorMethod<[], ReferralStats>,
+  'getStoreListingsByUser' : ActorMethod<[Principal], Array<StoreListing>>,
   'getUnreadMessageCount' : ActorMethod<[], bigint>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'likeOrUnlikePost' : ActorMethod<[bigint], undefined>,
   'loginWithCredentials' : ActorMethod<[string, string], boolean>,
+  'markAccountVerified' : ActorMethod<[], undefined>,
   'markConversationRead' : ActorMethod<[Principal], undefined>,
+  'markNotificationAsRead' : ActorMethod<[bigint], undefined>,
+  'redeemReferralCode' : ActorMethod<[string], undefined>,
   'registerWithCredentials' : ActorMethod<[string, string], undefined>,
+  'removeEmojiReaction' : ActorMethod<[bigint, string], undefined>,
   'removeGroupMember' : ActorMethod<[bigint, Principal], undefined>,
   'respondToFriendRequest' : ActorMethod<[Principal, boolean], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'sendFriendRequest' : ActorMethod<[Principal], undefined>,
   'sendGroupMessage' : ActorMethod<[bigint, string], bigint>,
-  'sendMessage' : ActorMethod<[Principal, string], undefined>,
+  'sendMessage' : ActorMethod<[Principal, string], bigint>,
+  'storeCallAnswer' : ActorMethod<[string, string], undefined>,
+  'storeCallOffer' : ActorMethod<[string, string, Principal], undefined>,
   'unfollowUser' : ActorMethod<[Principal], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
